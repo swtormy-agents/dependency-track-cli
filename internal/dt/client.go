@@ -51,8 +51,9 @@ func (c *Client) http() *http.Client {
 }
 
 // Redact removes the API key from text that may reach logs or output.
+// Keys shorter than 16 characters are not substituted to avoid false positives.
 func (c *Client) Redact(s string) string {
-	if c.APIKey == "" {
+	if c.APIKey == "" || len(c.APIKey) < 16 {
 		return s
 	}
 	return strings.ReplaceAll(s, c.APIKey, "<API_KEY>")
@@ -89,7 +90,7 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 		return nil, nil, fmt.Errorf("read response: %s", c.Redact(err.Error()))
 	}
 	if resp.StatusCode >= 400 {
-		msg := parseMessage(data)
+		msg := c.Redact(parseMessage(data))
 		return nil, resp.Header, &APIError{Status: resp.StatusCode, Message: msg, Body: data}
 	}
 	if len(data) == 0 {
@@ -231,15 +232,16 @@ func (c *Client) UploadBOM(ctx context.Context, projectUUID, bomPath string) (js
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	resp, err := c.http().Do(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.New(c.Redact(err.Error()))
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("read response: %s", c.Redact(err.Error()))
 	}
 	if resp.StatusCode >= 400 {
-		return nil, resp.Header, &APIError{Status: resp.StatusCode, Message: parseMessage(data), Body: data}
+		msg := c.Redact(parseMessage(data))
+		return nil, resp.Header, &APIError{Status: resp.StatusCode, Message: msg, Body: data}
 	}
 	if len(data) == 0 {
 		return json.RawMessage("null"), resp.Header, nil

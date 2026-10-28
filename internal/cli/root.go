@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/swtormy-agents/dependency-track-cli/internal/config"
 	"github.com/swtormy-agents/dependency-track-cli/internal/dt"
 )
 
@@ -100,7 +99,6 @@ type app struct {
 	maxItems int
 	untrusted bool
 	apiKey  string
-	access  *config.State
 }
 
 func Execute(args []string, stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) int {
@@ -127,7 +125,7 @@ func (a *app) reportError(err error) int {
 	if ee.api != nil {
 		detail["status"] = ee.api.Status
 		if ee.api.Message != "" {
-			detail["message"] = ee.api.Message
+			detail["message"] = a.redact(ee.api.Message)
 		}
 	}
 	b, _ := marshal(map[string]any{"ok": false, "error": detail})
@@ -137,18 +135,6 @@ func (a *app) reportError(err error) int {
 
 func (a *app) redact(s string) string {
 	return (&dt.Client{APIKey: a.apiKey}).Redact(s)
-}
-
-func (a *app) loadAccess() error {
-	if a.access != nil {
-		return nil
-	}
-	st, err := config.Load(a.getenv)
-	if err != nil {
-		return runtimeErr(err)
-	}
-	a.access = st
-	return nil
 }
 
 func (a *app) resolveAPIKey() error {
@@ -259,7 +245,6 @@ Setup (human, once)
   export DTRACK_URL=https://dtrack.example:8081
   export DTRACK_API_KEY=...          team API key (never pass on the command line)
 
-Read-only by default. BOM upload and analysis changes need write access:
-  dtrack access write                  human at a TTY types "write"
+Read-only for agents. Mutating commands need --write, an interactive terminal, and typing "write" when prompted.
 
-Exit codes: 0 ok, 1 runtime/API, 2 usage, 3 auth (missing key or HTTP 401/403), 4 blocked by access policy.`
+Exit codes: 0 ok, 1 runtime/API, 2 usage, 3 auth (missing key, HTTP 401/403, or write refused), 4 blocked by raw blocklist.`

@@ -33,10 +33,11 @@ echo "$DTRACK_API_KEY" | dtrack status
    - Read: `VIEW_PORTFOLIO`, `VIEW_VULNERABILITY`, `VIEW_POLICY_VIOLATION` (typical triage)
    - Write: add `VULNERABILITY_ANALYSIS` for analysis updates, `BOM_UPLOAD` for BOM upload
 2. **Store the key** in your environment or a `chmod 600` file referenced by `DTRACK_API_KEY_FILE`.
-3. **Enable writes** when you intend to change analysis or upload BOMs (agents stay read-only until you do this):
+3. **Run write commands yourself** in an interactive terminal (agents are read-only). Each mutating command needs `--write` and typing `write` when prompted:
 
    ```bash
-   dtrack access write    # interactive terminal — type `write` to confirm
+   dtrack analysis set --write --project ... --component ... --vuln ... --state NOT_AFFECTED
+   dtrack bom upload --write --project ... --file bom.json
    ```
 
 4. **Install the agent skill** (optional):
@@ -47,8 +48,8 @@ echo "$DTRACK_API_KEY" | dtrack status
 
 ## Safety
 
-- JSON on stdout; one JSON error line on stderr. Exit codes: `0` ok, `1` runtime/API, `2` usage, `3` auth, `4` blocked by local access policy.
-- Read-only by default. `bom upload`, `analysis set`, and mutating `raw` calls require `dtrack access write` from a human at a TTY.
+- JSON on stdout; one JSON error line on stderr. Exit codes: `0` ok, `1` runtime/API, `2` usage, `3` auth (missing key, HTTP 401/403, or write refused), `4` blocked by `raw` blocklist.
+- Agents stay read-only. `config.json` does not grant write access. Mutating commands require `--write`, a TTY, and typed confirmation in the same invocation.
 - Third-party text in responses can be wrapped with `"untrusted": true` (default `--mark-untrusted`).
 - `raw` blocks destructive admin routes (DELETE on projects/teams/users, config changes).
 

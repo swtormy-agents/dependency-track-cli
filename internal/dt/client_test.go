@@ -23,8 +23,12 @@ func TestClientGet(t *testing.T) {
 }
 
 func TestRedact(t *testing.T) {
-	c := &Client{APIKey: "abc123"}
-	if s := c.Redact("error abc123 here"); s != "error <API_KEY> here" {
+	c := &Client{APIKey: "abcdefghijklmnop"}
+	if s := c.Redact("error abcdefghijklmnop here"); s != "error <API_KEY> here" {
 		t.Fatal(s)
+	}
+	c.APIKey = "short"
+	if s := c.Redact("error short here"); s != "error short here" {
+		t.Fatal("short keys must not be redacted:", s)
 	}
 }

@@ -14,13 +14,15 @@ import (
 	"github.com/swtormy-agents/dependency-track-cli/internal/config"
 )
 
-func testEnv(url, key string) func(string) string {
+const testAPIKey = "team-api-key-16b" // 16 chars — redaction applies in tests
+
+func testEnv(url string) func(string) string {
 	return func(k string) string {
 		switch k {
 		case "DTRACK_URL":
 			return url
 		case "DTRACK_API_KEY":
-			return key
+			return testAPIKey
 		}
 		return ""
 	}
@@ -29,14 +31,14 @@ func testEnv(url, key string) func(string) string {
 func runCLI(t *testing.T, srv *httptest.Server, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = Execute(args, strings.NewReader(""), &out, &errOut, testEnv(srv.URL, "test-key"))
+	code = Execute(args, strings.NewReader(""), &out, &errOut, testEnv(srv.URL))
 	return code, out.String(), errOut.String()
 }
 
 func TestVersionAndStatus(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Api-Key") != "test-key" {
+		if r.Header.Get("X-Api-Key") != testAPIKey {
 			http.Error(w, "nope", http.StatusUnauthorized)
 			return
 		}
@@ -75,34 +77,54 @@ func TestAuthFailure(t *testing.T) {
 	}
 }
 
-func TestWriteBlocked(t *testing.T) {
-	dir := t.TempDir()
-	getenv := func(k string) string {
-		if k == "DTRACK_HOME" {
-			return dir
-		}
-		return testEnv("http://example", "k")(k)
+func TestAuth401KeyNotInStderr(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.Header.Get("X-Api-Key")
+		http.Error(w, `{"detail":"invalid key `+key+`"}`, http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	code, _, errOut := runCLI(t, srv, "version")
+	if code != 3 {
+		t.Fatalf("want exit 3 got %d", code)
 	}
-	var errOut bytes.Buffer
-	code := Execute([]string{"analysis", "set", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"},
-		strings.NewReader(""), io.Discard, &errOut, getenv)
-	if code != 4 {
-		t.Fatalf("want 4 got %d: %s", code, errOut.String())
+	if strings.Contains(errOut, testAPIKey) {
+		t.Fatalf("API key leaked to stderr: %s", errOut)
+	}
+	if !strings.Contains(errOut, "<API_KEY>") {
+		t.Fatalf("expected redacted placeholder in stderr: %s", errOut)
 	}
 }
 
-func TestAccessWriteNeedsTTY(t *testing.T) {
+func TestWriteRequiresWriteFlag(t *testing.T) {
+	var errOut bytes.Buffer
+	code := Execute([]string{"analysis", "set", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"},
+		strings.NewReader(""), io.Discard, &errOut, testEnv("http://example"))
+	if code != 3 {
+		t.Fatalf("want 3 got %d: %s", code, errOut.String())
+	}
+}
+
+func TestConfigWriteFileStillBlocked(t *testing.T) {
 	dir := t.TempDir()
 	getenv := func(k string) string {
-		if k == "DTRACK_HOME" {
+		switch k {
+		case "DTRACK_HOME":
 			return dir
+		case "DTRACK_URL":
+			return "http://example"
+		case "DTRACK_API_KEY":
+			return testAPIKey
 		}
 		return ""
 	}
+	if err := config.Save(getenv, &config.State{Access: config.AccessWrite}); err != nil {
+		t.Fatal(err)
+	}
 	var errOut bytes.Buffer
-	code := Execute([]string{"access", "write"}, strings.NewReader(""), io.Discard, &errOut, getenv)
-	if code != 4 {
-		t.Fatalf("want 4 got %d stderr=%s", code, errOut.String())
+	code := Execute([]string{"analysis", "set", "--write", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"},
+		strings.NewReader(""), io.Discard, &errOut, getenv)
+	if code != 3 {
+		t.Fatalf("want 3 without TTY even with config write and --write, got %d: %s", code, errOut.String())
 	}
 }
 
@@ -135,7 +157,7 @@ func TestProjectListPaginationCap(t *testing.T) {
 	}
 }
 
-func TestBOMUploadNotBlockedWhenWriteEnabled(t *testing.T) {
+func TestBOMUploadBlockedWithoutTTY(t *testing.T) {
 	dir := t.TempDir()
 	bom := filepath.Join(dir, "bom.json")
 	os.WriteFile(bom, []byte("{}"), 0o644)
@@ -146,32 +168,22 @@ func TestBOMUploadNotBlockedWhenWriteEnabled(t *testing.T) {
 		case "DTRACK_URL":
 			return "http://127.0.0.1:1"
 		case "DTRACK_API_KEY":
-			return "k"
+			return testAPIKey
 		}
 		return ""
 	}
-	if err := config.Save(getenv, &config.State{Access: config.AccessWrite}); err != nil {
-		t.Fatal(err)
-	}
 	var errOut bytes.Buffer
-	code := Execute([]string{"bom", "upload", "--project", "p", "--file", bom},
+	code := Execute([]string{"bom", "upload", "--write", "--project", "p", "--file", bom},
 		strings.NewReader(""), io.Discard, &errOut, getenv)
-	if code == 4 {
-		t.Fatalf("should not be blocked: %s", errOut.String())
+	if code != 3 {
+		t.Fatalf("want 3 got %d: %s", code, errOut.String())
 	}
 }
 
 func TestRawDeleteBlocked(t *testing.T) {
-	dir := t.TempDir()
-	getenv := func(k string) string {
-		if k == "DTRACK_HOME" {
-			return dir
-		}
-		return testEnv("http://example", "k")(k)
-	}
 	var errOut bytes.Buffer
 	code := Execute([]string{"raw", "DELETE", "/api/v1/project/abc"},
-		strings.NewReader(""), io.Discard, &errOut, getenv)
+		strings.NewReader(""), io.Discard, &errOut, testEnv("http://example"))
 	if code != 4 {
 		t.Fatalf("want 4 got %d", code)
 	}

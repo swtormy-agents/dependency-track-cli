@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/swtormy-agents/dependency-track-cli/internal/config"
 	"github.com/swtormy-agents/dependency-track-cli/internal/dt"
 	"golang.org/x/term"
 )
@@ -40,9 +39,6 @@ func (a *app) statusCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			if err := a.loadAccess(); err != nil {
-				return err
-			}
 			c, err := a.client(ctx)
 			if err != nil {
 				return err
@@ -51,7 +47,7 @@ func (a *app) statusCmd() *cobra.Command {
 			if a.dryRun {
 				return a.emitValue(map[string]any{
 					"request": dt.DryRun(http.MethodGet, c.BaseURL, path, nil, nil),
-					"access":  a.access.Access,
+					"mode":    "read-only",
 				})
 			}
 			raw, _, err := c.Get(ctx, path, nil)
@@ -59,7 +55,7 @@ func (a *app) statusCmd() *cobra.Command {
 				return a.wrapAPI(err)
 			}
 			var metrics json.RawMessage = raw
-			return a.emitValue(map[string]any{"ok": true, "url": c.BaseURL, "access": a.access.Access, "metrics": metrics})
+			return a.emitValue(map[string]any{"ok": true, "url": c.BaseURL, "mode": "read-only", "metrics": metrics})
 		},
 	}
 }
@@ -83,46 +79,18 @@ func (a *app) simpleGet(path string, query map[string]string) func(*cobra.Comman
 }
 
 func (a *app) accessCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "access [read|write]",
-		Short: "Show or change local write access (write needs a human at a TTY)",
-		Long: `Without an argument, shows the local access level stored in your config directory.
-
-  read   (default) only read commands work; BOM upload and analysis changes exit 4
-  write  allows analysis set and BOM upload
-
-Switching to write requires an interactive terminal and typing "write".`,
-		Args: cobra.MaximumNArgs(1),
+	return &cobra.Command{
+		Use:   "access",
+		Short: "Explain the read-only write policy",
+		Long:  `dtrack never stores write access in config.json. Mutating commands require --write, an interactive terminal, and typing "write" in that same invocation.`,
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := a.loadAccess(); err != nil {
-				return err
-			}
-			if len(args) == 1 {
-				switch args[0] {
-				case config.AccessRead:
-				case config.AccessWrite:
-					if !isTerminal(a.in) {
-						return blockedErr(fmt.Errorf("write access can only be granted in an interactive terminal; ask the user to run `dtrack access write` themselves"))
-					}
-					fmt.Fprintf(a.errOut, "Allow dtrack to upload BOMs and set vulnerability analysis on %s? Type 'write' to confirm: ", a.getenv("DTRACK_URL"))
-					var ans string
-					fmt.Fscanln(a.in, &ans)
-					ans = strings.TrimSpace(ans)
-					if ans != "write" {
-						return usageErr("cancelled")
-					}
-				default:
-					return usageErr("access must be read or write")
-				}
-				a.access.Access = args[0]
-				if err := config.Save(a.getenv, a.access); err != nil {
-					return runtimeErr(err)
-				}
-			}
-			return a.emitValue(map[string]any{"access": a.access.Access})
+			return a.emitValue(map[string]any{
+				"mode":   "read-only",
+				"writes": "Pass --write on bom upload, analysis set, or mutating raw; confirm in an interactive terminal by typing write",
+			})
 		},
 	}
-	return cmd
 }
 
 func (a *app) projectCmd() *cobra.Command {

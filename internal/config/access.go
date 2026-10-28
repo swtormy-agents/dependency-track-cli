@@ -52,9 +52,8 @@ func Load(getenv func(string) string) (*State, error) {
 	if err := json.Unmarshal(b, &st); err != nil {
 		return nil, fmt.Errorf("corrupt %s: %w", path, err)
 	}
-	if st.Access == "" {
-		st.Access = AccessRead
-	}
+	// Legacy config.json "access":"write" is ignored; writes are per-command with --write + TTY.
+	st.Access = AccessRead
 	return &st, nil
 }
 
@@ -76,11 +75,5 @@ func Save(getenv func(string) string, st *State) error {
 	return os.WriteFile(path, b, 0o600)
 }
 
-func (st *State) CanWrite() bool { return st.Access == AccessWrite }
-
-func (st *State) RequireWrite(what string) error {
-	if st.CanWrite() {
-		return nil
-	}
-	return fmt.Errorf("%s changes Dependency-Track and access is read-only; ask the user to run `dtrack access write` in their own terminal", what)
-}
+// CanWrite is always false; local config does not grant write access.
+func (st *State) CanWrite() bool { return false }
