@@ -1,6 +1,6 @@
 module github.com/swtormy-agents/dependency-track-cli
 
-go 1.24.11
+go 1.24.13
 
 require (
 	github.com/itchyny/gojq v0.12.17
