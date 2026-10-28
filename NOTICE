@@ -1,0 +1,7 @@
+dependency-track-cli
+
+This product includes software developed by third parties:
+
+- Dependency-Track REST API documentation and OpenAPI descriptions
+  https://github.com/DependencyTrack/dependency-track
+  Apache License 2.0
