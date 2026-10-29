@@ -34,6 +34,16 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           govulncheck ./...
 
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34
+        with:
+          go-version-file: go.mod
+      - name: License policy (no GPL/AGPL/LGPL)
+        run: scripts/check-licenses.sh
+
   gitleaks:
     runs-on: ubuntu-latest
     steps:
