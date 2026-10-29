@@ -21,7 +21,7 @@ export DTRACK_API_KEY=...                       # team API key from a human
 dtrack status
 ```
 
-Exit codes: `0` ok, `1` API/runtime, `2` usage, `3` auth (missing key, HTTP 401/403, or write refused), `4` blocked (`raw` blocklist).
+Exit codes: `0` ok, `1` API/runtime, `2` usage or config (including API keys shorter than 16 characters), `3` auth (missing key, HTTP 401/403, or write refused/cancelled), `4` blocked (`raw` blocklist).
 
 ## Recipes (read)
 

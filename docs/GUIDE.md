@@ -4,7 +4,7 @@
 
 1. Point `DTRACK_URL` at the **API** base URL (scheme + host + port). In the default Docker Compose layout the API listens on **8081**; port **8080** is often the frontend only.
 2. Create a **team API key** with the permissions your workflow needs (reuse Dependency-Track permission names: `VIEW_PORTFOLIO`, `VIEW_VULNERABILITY`, `VULNERABILITY_ANALYSIS`, `BOM_UPLOAD`, …).
-3. Export `DTRACK_API_KEY` or set `DTRACK_API_KEY_FILE` to a `0600` file. Do not pass the key as a CLI argument.
+3. Export `DTRACK_API_KEY` or set `DTRACK_API_KEY_FILE` to a `0600` file. Do not pass the key as a CLI argument. Keys must be **at least 16 characters** (typical Dependency-Track team keys are UUIDs); shorter values are rejected at startup with exit `2` because they cannot be redacted safely from logs.
 4. Run `dtrack status` — exit `0` means the URL and key work for at least portfolio metrics.
 5. **Writes:** only a human in an interactive terminal. Pass `--write` on the mutating command and type `write` when prompted. There is no persistent write mode in `config.json`.
 
@@ -35,10 +35,12 @@ List commands honor `--page-size` (default 100) and `--max-items` (default 500).
 
 | Symptom | Likely cause | Fix |
 |---------|----------------|-----|
+| Exit `2`, `"type":"config"`, short API key | Key under 16 characters | Use a full Dependency-Track team API key (UUID length); shorter values are rejected |
+| Exit `2`, `"type":"usage"` | Bad flags or arguments | Fix the command line (`dtrack --help`) |
 | Exit `3`, `"type":"auth"`, HTTP 401 | Missing/invalid API key | Set `DTRACK_API_KEY`; create a new team key if it was rotated |
 | Exit `3`, HTTP 403 | Key lacks permission | Add `VIEW_PORTFOLIO` / `VIEW_VULNERABILITY` / … on the team |
 | Exit `3`, connection errors | Wrong URL or port | Use API port (`8081` in default Docker), check TLS and firewall |
-| Exit `3`, read-only / no TTY | Agent or script tried a write | Human runs the command with `--write` in a real terminal |
+| Exit `3`, read-only / no TTY / write denied | Agent, script, or human declined the write prompt | Human runs the command with `--write` in a real terminal and types `write` when prompted |
 | Exit `3`, API key in error text | Server echoed the key | Should be redacted in stderr; upgrade if you see the raw key |
 | Exit `4`, raw blocked | Hit admin blocklist | Use typed commands; do not DELETE projects via CLI |
 | Empty `project list` | Portfolio empty or filters | Verify projects in UI; increase caps only after narrowing |

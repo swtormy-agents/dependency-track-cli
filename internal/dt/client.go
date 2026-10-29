@@ -16,7 +16,10 @@ import (
 	"strings"
 )
 
-const DefaultPageSize = 100
+const (
+	DefaultPageSize   = 100
+	MinAPIKeyLength   = 16
+)
 
 type Client struct {
 	BaseURL string
@@ -53,7 +56,7 @@ func (c *Client) http() *http.Client {
 // Redact removes the API key from text that may reach logs or output.
 // Keys shorter than 16 characters are not substituted to avoid false positives.
 func (c *Client) Redact(s string) string {
-	if c.APIKey == "" || len(c.APIKey) < 16 {
+	if c.APIKey == "" || len(c.APIKey) < MinAPIKeyLength {
 		return s
 	}
 	return strings.ReplaceAll(s, c.APIKey, "<API_KEY>")
