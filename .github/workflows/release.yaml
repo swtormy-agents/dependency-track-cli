@@ -18,11 +18,14 @@ jobs:
           go-version-file: go.mod
       - name: Test
         run: go test ./...
+      - name: License policy (no GPL/AGPL/LGPL)
+        run: scripts/check-licenses.sh
       - name: Build artifacts
         run: scripts/build-release.sh "${GITHUB_REF_NAME}"
       - name: Create release
         run: |
           gh release create "${GITHUB_REF_NAME}" dist/* \
+            --draft \
             --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

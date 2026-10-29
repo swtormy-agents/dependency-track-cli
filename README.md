@@ -4,11 +4,13 @@
 
 ## Install
 
+Download a release archive from [GitHub Releases](https://github.com/swtormy-agents/dependency-track-cli/releases) (Linux and Windows, amd64/arm64). Extract the binary and add it to your `PATH`.
+
+Or install from source with Go:
+
 ```bash
 go install github.com/swtormy-agents/dependency-track-cli/cmd/dtrack@latest
 ```
-
-Or download a release archive from GitHub (Linux/macOS/Windows, amd64/arm64).
 
 ## Quick start
 
@@ -57,4 +59,4 @@ See [docs/GUIDE.md](docs/GUIDE.md) for setup, commands, and troubleshooting.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Third-party notices in [NOTICE](NOTICE).
+MIT — see [LICENSE](LICENSE). Third-party notices in [NOTICE](NOTICE); release archives also ship `THIRD_PARTY_NOTICES` and `third-party-licenses/`.
