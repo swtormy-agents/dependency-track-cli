@@ -16,8 +16,8 @@ license_stage="dist/.license-staging"
 rm -rf "${license_stage}"
 mkdir -p "${license_stage}"
 
-dtrack_go_licenses report "${DTRACK_LICENSE_PACKAGE}" >"${license_stage}/report.csv" 2>/dev/null
-dtrack_go_licenses save "${DTRACK_LICENSE_PACKAGE}" --save_path="${license_stage}/licenses" 2>/dev/null
+dtrack_go_licenses report "${DTRACK_LICENSE_PACKAGE}" >"${license_stage}/report.csv"
+dtrack_go_licenses save "${DTRACK_LICENSE_PACKAGE}" --save_path="${license_stage}/licenses"
 
 {
   echo "Third-party licenses for dtrack ${version}"
@@ -35,16 +35,20 @@ dtrack_go_licenses save "${DTRACK_LICENSE_PACKAGE}" --save_path="${license_stage
 } >"${license_stage}/THIRD_PARTY_NOTICES"
 
 mkdir -p "${license_stage}/apache-notices"
-while IFS=, read -r mod _ lic; do
-  [ -n "$mod" ] || continue
+declare -A _dtrack_apache_mod_seen=()
+while IFS=, read -r pkg_path _ lic; do
+  [ -n "$pkg_path" ] || continue
   [ "$lic" = "Apache-2.0" ] || continue
-  mod_dir="$(go list -m -f '{{.Dir}}' "${mod}" 2>/dev/null || true)"
+  mod_path=""
+  mod_dir=""
+  read -r mod_path mod_dir <<<"$(go list -f '{{if .Module}}{{.Module.Path}} {{.Module.Dir}}{{end}}' "${pkg_path}")"
   [ -n "${mod_dir}" ] || continue
+  [ -n "${_dtrack_apache_mod_seen[${mod_path}]+x}" ] && continue
+  _dtrack_apache_mod_seen["${mod_path}"]=1
   while IFS= read -r -d '' notice; do
-    rel="${mod}$(basename "$notice")"
-    safe="$(echo "${rel}" | tr '/@.' '___')"
+    safe="$(echo "${mod_path}_$(basename "$notice")" | tr '/@.' '___')"
     cp "$notice" "${license_stage}/apache-notices/${safe}"
-  done < <(find "${mod_dir}" -maxdepth 1 -type f \( -iname 'NOTICE' -o -iname 'NOTICE.txt' \) -print0 2>/dev/null)
+  done < <(find "${mod_dir}" -maxdepth 1 -type f \( -iname 'NOTICE' -o -iname 'NOTICE.txt' \) -print0)
 done < <(tail -n +1 "${license_stage}/report.csv")
 
 # linux/amd64 linux/arm64 windows/amd64 windows/arm64

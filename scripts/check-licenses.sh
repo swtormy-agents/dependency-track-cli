@@ -9,8 +9,8 @@ source scripts/go-licenses-env.sh
 pkg="${DTRACK_LICENSE_PACKAGE}"
 
 echo "=== go-licenses report (${GO_LICENSES_VERSION}, ${pkg}) ==="
-dtrack_go_licenses report "${pkg}" 2>/dev/null
+dtrack_go_licenses report "${pkg}"
 
 echo
 echo "=== go-licenses check (disallowed_types=forbidden,restricted) ==="
-dtrack_go_licenses check "${pkg}" --disallowed_types=forbidden,restricted 2>/dev/null
+dtrack_go_licenses check "${pkg}" --disallowed_types=forbidden,restricted
