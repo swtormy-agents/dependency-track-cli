@@ -104,7 +104,7 @@ func TestWriteRequiresWriteFlag(t *testing.T) {
 }
 
 func TestShortAPIKeyRejected(t *testing.T) {
-	shortKey := "short-key-15c" // 15 characters
+	shortKey := "short-key-15c" // 15 characters // gitleaks:allow
 	getenv := func(k string) string {
 		switch k {
 		case "DTRACK_URL":
