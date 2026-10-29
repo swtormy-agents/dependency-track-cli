@@ -44,6 +44,10 @@ func authErr(err error) error {
 	return &exitError{code: exitAuth, kind: "auth", err: err}
 }
 
+func configErr(err error) error {
+	return &exitError{code: exitUsage, kind: "config", err: err}
+}
+
 func blockedErr(err error) error {
 	return &exitError{code: exitBlocked, kind: "blocked", err: err}
 }
@@ -137,13 +141,23 @@ func (a *app) redact(s string) string {
 	return (&dt.Client{APIKey: a.apiKey}).Redact(s)
 }
 
+func (a *app) validateAPIKey() error {
+	if len(a.apiKey) < dt.MinAPIKeyLength {
+		return configErr(fmt.Errorf(
+			"DTRACK_API_KEY must be at least %d characters (Dependency-Track team keys are longer; shorter values are rejected because they cannot be redacted safely from logs)",
+			dt.MinAPIKeyLength,
+		))
+	}
+	return nil
+}
+
 func (a *app) resolveAPIKey() error {
 	if a.apiKey != "" {
-		return nil
+		return a.validateAPIKey()
 	}
 	a.apiKey = strings.TrimSpace(a.getenv("DTRACK_API_KEY"))
 	if a.apiKey != "" {
-		return nil
+		return a.validateAPIKey()
 	}
 	if a.getenv("DTRACK_API_KEY_FILE") != "" {
 		b, err := os.ReadFile(a.getenv("DTRACK_API_KEY_FILE"))
@@ -152,7 +166,7 @@ func (a *app) resolveAPIKey() error {
 		}
 		a.apiKey = strings.TrimSpace(string(b))
 		if a.apiKey != "" {
-			return nil
+			return a.validateAPIKey()
 		}
 	}
 	rd := bufio.NewReader(a.in)
@@ -164,7 +178,7 @@ func (a *app) resolveAPIKey() error {
 	if a.apiKey == "" {
 		return authErr(errors.New("empty API key on stdin"))
 	}
-	return nil
+	return a.validateAPIKey()
 }
 
 func (a *app) client(ctx context.Context) (*dt.Client, error) {
@@ -247,4 +261,4 @@ Setup (human, once)
 
 Read-only for agents. Mutating commands need --write, an interactive terminal, and typing "write" when prompted.
 
-Exit codes: 0 ok, 1 runtime/API, 2 usage, 3 auth (missing key, HTTP 401/403, or write refused), 4 blocked by raw blocklist.`
+Exit codes: 0 ok, 1 runtime/API, 2 usage or config (invalid local setup, including API keys shorter than 16 characters), 3 auth (missing key, HTTP 401/403, or write refused/cancelled), 4 blocked by raw blocklist.`

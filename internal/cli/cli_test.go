@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/swtormy-agents/dependency-track-cli/internal/config"
 )
 
 const testAPIKey = "team-api-key-16b" // 16 chars — redaction applies in tests
@@ -104,8 +103,112 @@ func TestWriteRequiresWriteFlag(t *testing.T) {
 	}
 }
 
+func TestShortAPIKeyRejected(t *testing.T) {
+	shortKey := "short-key-15c" // 15 characters
+	getenv := func(k string) string {
+		switch k {
+		case "DTRACK_URL":
+			return "http://127.0.0.1:1"
+		case "DTRACK_API_KEY":
+			return shortKey
+		}
+		return ""
+	}
+	var errOut bytes.Buffer
+	code := Execute([]string{"version"}, strings.NewReader(""), io.Discard, &errOut, getenv)
+	if code != 2 {
+		t.Fatalf("want exit 2 got %d: %s", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), `"type":"config"`) {
+		t.Fatalf("want config error: %s", errOut.String())
+	}
+	if strings.Contains(errOut.String(), shortKey) {
+		t.Fatalf("short key leaked: %s", errOut.String())
+	}
+}
+
+func TestReportErrorRedactsAPIKey(t *testing.T) {
+	var errOut bytes.Buffer
+	a := &app{apiKey: testAPIKey, errOut: &errOut}
+	code := a.reportError(runtimeErr(fmt.Errorf("failure mentioning %s", testAPIKey)))
+	if code != 1 {
+		t.Fatalf("code=%d", code)
+	}
+	out := errOut.String()
+	if strings.Contains(out, testAPIKey) {
+		t.Fatalf("key leaked in reportError output: %s", out)
+	}
+	if !strings.Contains(out, "<API_KEY>") {
+		t.Fatalf("expected redaction placeholder: %s", out)
+	}
+}
+
+func TestDryRunOutputRedactsAPIKey(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	code, out, _ := runCLI(t, srv, "status", "--dry-run")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if strings.Contains(out, testAPIKey) {
+		t.Fatalf("dry-run leaked key: %s", out)
+	}
+	if !strings.Contains(out, "<API_KEY>") {
+		t.Fatalf("expected dry-run placeholder: %s", out)
+	}
+}
+
+func TestWriteConfirmationAllowsMutation(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/analysis", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldTTY := isTerminal
+	isTerminal = func(ioReader) bool { return true }
+	t.Cleanup(func() { isTerminal = oldTTY })
+
+	stdin := strings.NewReader("write\n")
+	var out, errOut bytes.Buffer
+	code := Execute(
+		[]string{"analysis", "set", "--write", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"},
+		stdin, &out, &errOut, testEnv(srv.URL),
+	)
+	if code != 0 {
+		t.Fatalf("want 0 got %d stderr=%s", code, errOut.String())
+	}
+}
+
+func TestWriteConfirmationDeniedExit3(t *testing.T) {
+	oldTTY := isTerminal
+	isTerminal = func(ioReader) bool { return true }
+	t.Cleanup(func() { isTerminal = oldTTY })
+
+	stdin := strings.NewReader("no\n")
+	var errOut bytes.Buffer
+	code := Execute(
+		[]string{"analysis", "set", "--write", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"},
+		stdin, io.Discard, &errOut, testEnv("http://example"),
+	)
+	if code != 3 {
+		t.Fatalf("want 3 got %d: %s", code, errOut.String())
+	}
+}
+
 func TestConfigWriteFileStillBlocked(t *testing.T) {
 	dir := t.TempDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"access":"write"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	getenv := func(k string) string {
 		switch k {
 		case "DTRACK_HOME":
@@ -117,14 +220,11 @@ func TestConfigWriteFileStillBlocked(t *testing.T) {
 		}
 		return ""
 	}
-	if err := config.Save(getenv, &config.State{Access: config.AccessWrite}); err != nil {
-		t.Fatal(err)
-	}
 	var errOut bytes.Buffer
 	code := Execute([]string{"analysis", "set", "--write", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"},
 		strings.NewReader(""), io.Discard, &errOut, getenv)
 	if code != 3 {
-		t.Fatalf("want 3 without TTY even with config write and --write, got %d: %s", code, errOut.String())
+		t.Fatalf("want 3 without TTY even with legacy config write and --write, got %d: %s", code, errOut.String())
 	}
 }
 

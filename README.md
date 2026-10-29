@@ -48,7 +48,7 @@ echo "$DTRACK_API_KEY" | dtrack status
 
 ## Safety
 
-- JSON on stdout; one JSON error line on stderr. Exit codes: `0` ok, `1` runtime/API, `2` usage, `3` auth (missing key, HTTP 401/403, or write refused), `4` blocked by `raw` blocklist.
+- JSON on stdout; one JSON error line on stderr. Exit codes: `0` ok, `1` runtime/API, `2` usage or config (invalid local setup, including API keys shorter than 16 characters), `3` auth (missing key, HTTP 401/403, or write refused/cancelled), `4` blocked by `raw` blocklist.
 - Agents stay read-only. `config.json` does not grant write access. Mutating commands require `--write`, a TTY, and typed confirmation in the same invocation.
 - Third-party text in responses can be wrapped with `"untrusted": true` (default `--mark-untrusted`).
 - `raw` blocks destructive admin routes (DELETE on projects/teams/users, config changes).

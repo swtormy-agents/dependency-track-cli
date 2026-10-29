@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,10 +28,10 @@ func (a *app) requireHumanWrite(cmd *cobra.Command, what string) error {
 	fmt.Fprint(a.errOut, writePrompt)
 	var ans string
 	if _, err := fmt.Fscanln(a.in, &ans); err != nil {
-		return usageErr("cancelled")
+		return authErr(errors.New("write confirmation cancelled"))
 	}
 	if strings.TrimSpace(ans) != "write" {
-		return usageErr("cancelled")
+		return authErr(errors.New("write confirmation denied"))
 	}
 	return nil
 }
