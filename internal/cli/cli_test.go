@@ -185,6 +185,69 @@ func TestWriteConfirmationAllowsMutation(t *testing.T) {
 	}
 }
 
+func TestAnalysisSetDetailsAndSuppress(t *testing.T) {
+	var got map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/analysis", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldTTY := isTerminal
+	isTerminal = func(ioReader) bool { return true }
+	t.Cleanup(func() { isTerminal = oldTTY })
+
+	base := []string{"analysis", "set", "--write", "--project", "p", "--component", "c", "--vuln", "v", "--state", "NOT_AFFECTED"}
+	run := func(extra ...string) {
+		t.Helper()
+		got = nil
+		var errOut bytes.Buffer
+		code := Execute(append(append([]string{}, base...), extra...),
+			strings.NewReader("write\n"), io.Discard, &errOut, testEnv(srv.URL))
+		if code != 0 {
+			t.Fatalf("want 0 got %d stderr=%s", code, errOut.String())
+		}
+	}
+
+	run("--details", "why", "--suppress")
+	if got["analysisDetails"] != "why" || got["isSuppressed"] != true {
+		t.Fatalf("unexpected body: %v", got)
+	}
+	run("--suppress=false")
+	if got["isSuppressed"] != false {
+		t.Fatalf("want isSuppressed=false: %v", got)
+	}
+	run()
+	if _, ok := got["isSuppressed"]; ok {
+		t.Fatalf("isSuppressed should be omitted: %v", got)
+	}
+	if _, ok := got["analysisDetails"]; ok {
+		t.Fatalf("analysisDetails should be omitted: %v", got)
+	}
+}
+
+func TestVulnGet(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/vulnerability/source/NVD/vuln/CVE-0000-0000", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"vulnId":"CVE-0000-0000"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	code, out, errOut := runCLI(t, srv, "vuln", "get", "NVD/CVE-0000-0000")
+	if code != 0 {
+		t.Fatalf("want 0 got %d stderr=%s", code, errOut)
+	}
+	if !strings.Contains(out, "CVE-0000-0000") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestWriteConfirmationDeniedExit3(t *testing.T) {
 	oldTTY := isTerminal
 	isTerminal = func(ioReader) bool { return true }
