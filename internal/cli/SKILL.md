@@ -40,7 +40,8 @@ dtrack search --query "jackson"
 
 ```bash
 dtrack analysis set --write --project P --component C --vuln V \
-  --state NOT_AFFECTED --justification CODE_NOT_PRESENT --comment "reason"
+  --state NOT_AFFECTED --justification CODE_NOT_PRESENT --comment "reason" \
+  --details "longer explanation" --suppress
 dtrack bom upload --write --project P --file bom.json
 ```
 

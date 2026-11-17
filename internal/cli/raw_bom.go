@@ -47,6 +47,10 @@ func (a *app) bomCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := a.confirmWrite(http.MethodPut, c.BaseURL+"/api/v1/bom", nil,
+				"project: "+uploadProject, "file: "+uploadFile); err != nil {
+				return err
+			}
 			if a.dryRun {
 				return a.emitValue(map[string]any{
 					"method":  http.MethodPut,
@@ -77,14 +81,14 @@ func (a *app) analysisRootCmd() *cobra.Command {
 }
 
 func (a *app) analysisSetCmd() *cobra.Command {
-	var project, component, vuln, state, justification, comment string
-	var writeFlag bool
+	var project, component, vuln, state, justification, comment, details string
+	var writeFlag, suppress bool
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set vulnerability analysis (human: --write + interactive confirmation)",
 		Long:  "Updates analysis via PUT /api/v1/analysis.",
 		Example: `  dtrack analysis set --project UUID --component UUID --vuln UUID \
-    --state NOT_AFFECTED --justification CODE_NOT_PRESENT --comment "not in our build"`,
+    --state NOT_AFFECTED --justification CODE_NOT_PRESENT --comment "not in our build" --details "feature disabled at compile time" --suppress`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := a.requireHumanWrite(cmd, "analysis set"); err != nil {
@@ -105,9 +109,18 @@ func (a *app) analysisSetCmd() *cobra.Command {
 			if comment != "" {
 				body["comment"] = comment
 			}
+			if details != "" {
+				body["analysisDetails"] = details
+			}
+			if cmd.Flags().Changed("suppress") {
+				body["isSuppressed"] = suppress
+			}
 			ctx := cmd.Context()
 			c, err := a.client(ctx)
 			if err != nil {
+				return err
+			}
+			if err := a.confirmWrite(http.MethodPut, c.BaseURL+"/api/v1/analysis", body); err != nil {
 				return err
 			}
 			if a.dryRun {
@@ -126,6 +139,8 @@ func (a *app) analysisSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&state, "state", "", "analysis state (NOT_AFFECTED, FALSE_POSITIVE, EXPLOITABLE, ...)")
 	cmd.Flags().StringVar(&justification, "justification", "", "analysis justification when required")
 	cmd.Flags().StringVar(&comment, "comment", "", "comment stored with the analysis")
+	cmd.Flags().StringVar(&details, "details", "", "analysis details (free-text explanation of the analysis)")
+	cmd.Flags().BoolVar(&suppress, "suppress", false, "suppress the finding (use --suppress=false to unsuppress; omitted leaves it unchanged)")
 	bindWriteFlag(cmd, &writeFlag)
 	return cmd
 }
@@ -158,19 +173,22 @@ func (a *app) rawCmd() *cobra.Command {
 			if path == "" || path[0] != '/' {
 				path = "/" + path
 			}
-			if a.dryRun {
-				var body any
-				if bodyJSON != "" {
-					_ = json.Unmarshal([]byte(bodyJSON), &body)
+			var body any
+			if bodyJSON != "" {
+				if err := json.Unmarshal([]byte(bodyJSON), &body); err != nil {
+					return usageErr("--body: %v", err)
 				}
+			}
+			if rawNeedsWrite(method) {
+				if err := a.confirmWrite(method, c.BaseURL+path, body); err != nil {
+					return err
+				}
+			}
+			if a.dryRun {
 				return a.emitValue(dt.DryRun(method, c.BaseURL, path, nil, body))
 			}
 			var raw json.RawMessage
 			if bodyJSON != "" {
-				var body any
-				if err := json.Unmarshal([]byte(bodyJSON), &body); err != nil {
-					return usageErr("--body: %v", err)
-				}
 				raw, _, err = c.JSON(ctx, method, path, body)
 			} else {
 				raw, _, err = c.Do(ctx, method, path, nil, nil)
