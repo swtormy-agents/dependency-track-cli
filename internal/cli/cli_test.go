@@ -183,6 +183,15 @@ func TestWriteConfirmationAllowsMutation(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("want 0 got %d stderr=%s", code, errOut.String())
 	}
+	prompt := errOut.String()
+	for _, want := range []string{"About to send: PUT " + srv.URL + "/api/v1/analysis", `"analysisState": "NOT_AFFECTED"`} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("confirmation should show %q, got:\n%s", want, prompt)
+		}
+	}
+	if strings.Index(prompt, "About to send") > strings.Index(prompt, writePrompt) {
+		t.Fatalf("request preview must come before the prompt:\n%s", prompt)
+	}
 }
 
 func TestWriteConfirmationDeniedExit3(t *testing.T) {
