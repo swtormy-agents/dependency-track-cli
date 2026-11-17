@@ -186,8 +186,9 @@ func (a *app) findingCmd() *cobra.Command {
 }
 
 func (a *app) vulnCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "vuln get <source>/<vulnId>",
+	vuln := &cobra.Command{Use: "vuln", Short: "Vulnerabilities"}
+	vuln.AddCommand(&cobra.Command{
+		Use:   "get <source>/<vulnId>",
 		Short: "Get a vulnerability (GET /api/v1/vulnerability/source/{source}/vuln/{id})",
 		Example: `  dtrack vuln get NVD/CVE-2024-1234
   dtrack vuln get github/GO-2024-0001`,
@@ -200,7 +201,8 @@ func (a *app) vulnCmd() *cobra.Command {
 			path := fmt.Sprintf("/api/v1/vulnerability/source/%s/vuln/%s", urlPathEscape(src), urlPathEscape(id))
 			return a.simpleGet(path, nil)(cmd, args)
 		},
-	}
+	})
+	return vuln
 }
 
 func urlPathEscape(s string) string {

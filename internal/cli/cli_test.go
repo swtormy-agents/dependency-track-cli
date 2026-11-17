@@ -185,6 +185,23 @@ func TestWriteConfirmationAllowsMutation(t *testing.T) {
 	}
 }
 
+func TestVulnGet(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/vulnerability/source/NVD/vuln/CVE-0000-0000", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"vulnId":"CVE-0000-0000"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	code, out, errOut := runCLI(t, srv, "vuln", "get", "NVD/CVE-0000-0000")
+	if code != 0 {
+		t.Fatalf("want 0 got %d stderr=%s", code, errOut)
+	}
+	if !strings.Contains(out, "CVE-0000-0000") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestWriteConfirmationDeniedExit3(t *testing.T) {
 	oldTTY := isTerminal
 	isTerminal = func(ioReader) bool { return true }
