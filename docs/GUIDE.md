@@ -18,6 +18,7 @@
 | `dtrack project get --uuid` | `GET /api/v1/project/{uuid}` | `VIEW_PORTFOLIO` |
 | `dtrack project lookup --name [--version]` | `GET /api/v1/project/lookup` | `VIEW_PORTFOLIO` |
 | `dtrack component list --project` | `GET /api/v1/component/project/{uuid}` | `VIEW_PORTFOLIO` |
+| `dtrack component lookup --name [--version]` | `GET /api/v1/component/identity` | `VIEW_PORTFOLIO` |
 | `dtrack finding list --project` | `GET /api/v1/finding/project/{uuid}` | `VIEW_VULNERABILITY` |
 | `dtrack vuln get SOURCE/id` | `GET /api/v1/vulnerability/source/...` | `VIEW_VULNERABILITY` |
 | `dtrack violation list --project` | `GET /api/v1/violation/project/{uuid}` | `VIEW_POLICY_VIOLATION` |
