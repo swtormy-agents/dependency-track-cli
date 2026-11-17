@@ -29,6 +29,7 @@ Exit codes: `0` ok, `1` API/runtime, `2` usage or config (including API keys sho
 dtrack version
 dtrack project list --max-items 50
 dtrack project lookup --name myapp --version 1.0.0
+dtrack component lookup --name log4j-core --version 2.14.1
 dtrack finding list --project UUID --severity HIGH
 dtrack vuln get NVD/CVE-2024-1234
 dtrack metrics portfolio

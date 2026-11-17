@@ -185,6 +185,39 @@ func TestWriteConfirmationAllowsMutation(t *testing.T) {
 	}
 }
 
+func TestComponentLookup(t *testing.T) {
+	var gotQuery map[string][]string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/component/identity", func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		w.Header().Set("X-Total-Count", "1")
+		w.Write([]byte(`[{"name":"example-lib","version":"0.0.0"}]`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	code, out, errOut := runCLI(t, srv, "component", "lookup", "--name", "example-lib", "--version", "0.0.0")
+	if code != 0 {
+		t.Fatalf("want 0 got %d stderr=%s", code, errOut)
+	}
+	if gotQuery["name"][0] != "example-lib" || gotQuery["version"][0] != "0.0.0" {
+		t.Fatalf("unexpected query: %v", gotQuery)
+	}
+	if _, ok := gotQuery["group"]; ok {
+		t.Fatalf("empty --group should not be sent: %v", gotQuery)
+	}
+	if _, ok := gotQuery["project"]; ok {
+		t.Fatalf("empty --project should not be sent: %v", gotQuery)
+	}
+	if !strings.Contains(out, "example-lib") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+
+	if code, _, _ = runCLI(t, srv, "component", "lookup", "--version", "0.0.0"); code != 2 {
+		t.Fatalf("missing --name: want 2 got %d", code)
+	}
+}
+
 func TestWriteConfirmationDeniedExit3(t *testing.T) {
 	oldTTY := isTerminal
 	isTerminal = func(ioReader) bool { return true }

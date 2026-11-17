@@ -152,7 +152,31 @@ func (a *app) componentCmd() *cobra.Command {
 		},
 	}
 	list.Flags().StringVar(&project, "project", "", "project UUID")
-	component.AddCommand(list)
+	var name, version, group, inProject string
+	lookup := &cobra.Command{
+		Use:   "lookup",
+		Short: "Lookup components by name and version",
+		Long:  "GET /api/v1/component/identity across the portfolio, or within one project with --project.",
+		Example: `  dtrack component lookup --name log4j-core --version 2.14.1
+  dtrack component lookup --group org.apache.logging.log4j --name log4j-core --project UUID`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if name == "" {
+				return usageErr("--name is required")
+			}
+			return a.listGET(cmd.Context(), "/api/v1/component/identity", map[string]string{
+				"name":    name,
+				"version": version,
+				"group":   group,
+				"project": inProject,
+			})
+		},
+	}
+	lookup.Flags().StringVar(&name, "name", "", "component name")
+	lookup.Flags().StringVar(&version, "version", "", "component version")
+	lookup.Flags().StringVar(&group, "group", "", "component group / namespace (e.g. Maven groupId)")
+	lookup.Flags().StringVar(&inProject, "project", "", "limit to one project UUID")
+	component.AddCommand(list, lookup)
 	return component
 }
 
